@@ -1,0 +1,11 @@
+{
+    "server": {
+        "host": "localhost",
+        "port": 8102,
+        "auto_start": true
+    },
+    "api": {
+        "enable_cors": true,
+        "max_connections": 10
+    }
+}

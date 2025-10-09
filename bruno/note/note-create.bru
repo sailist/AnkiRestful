@@ -1,0 +1,25 @@
+meta {
+  name: note-create
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/notes
+  body: json
+  auth: inherit
+}
+
+body:json {
+    {
+        "data": {
+            "type": "notes",
+            "deck_id": 1759971095180,
+            "attributes": {
+                "note_type": "Basic+",
+                "fields": { "Front": "Q", "Back": "A" },
+                "tags": ["tag1", "tag2"]
+            }
+        }
+    }
+}

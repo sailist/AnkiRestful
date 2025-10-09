@@ -1,0 +1,25 @@
+meta {
+  name: note-delete
+  type: http
+  seq: 4
+}
+
+delete {
+  url: {{baseUrl}}/api/notes/1760022497631
+  body: json
+  auth: inherit
+}
+
+body:json {
+    {
+        "data": {
+            "type": "notes",
+            "deck_id": 1759971095180,
+            "attributes": {
+                "note_type": "Basic+",
+                "fields": { "Front": "Q", "Back": "A" },
+                "tags": ["tag1", "tag2"]
+            }
+        }
+    }
+}
