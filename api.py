@@ -19,7 +19,6 @@ API_ROUTES = {}
 
 logger = logging.getLogger()
 logger.info("API module loaded")
-logger.info(f"sys.path: {sys.modules.keys()}")
 
 
 def api_route(path):
@@ -213,10 +212,7 @@ class NotesAPIHandler(APIHandler):
             "guid": note.guid,
             "note_type": note_type["name"] if note_type else note_type_name,
             "tags": note.tags,
-            "fields": {
-                "dbg:note_type_name": note_type_name,
-                "dbg:notetype": model["name"],
-            },
+            "fields": {},
             "created": note.mod,
             "modified": note.mod,
         }

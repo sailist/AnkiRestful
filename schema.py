@@ -10,6 +10,7 @@ from typing import List, Dict, Any, Optional, Union
 @dataclass
 class Link:
     """链接信息"""
+
     self: Optional[str] = None
     related: Optional[str] = None
     first: Optional[str] = None
@@ -21,6 +22,7 @@ class Link:
 @dataclass
 class Links:
     """链接集合"""
+
     self: Optional[Union[str, Link]] = None
     related: Optional[Union[str, Link]] = None
     first: Optional[Union[str, Link]] = None
@@ -32,6 +34,7 @@ class Links:
 @dataclass
 class ResourceIdentifier:
     """资源标识符对象"""
+
     type: str
     id: str
 
@@ -39,7 +42,10 @@ class ResourceIdentifier:
 @dataclass
 class Relationship:
     """关系对象"""
-    data: Optional[Union[ResourceIdentifier, List[ResourceIdentifier], Dict[str, Any]]] = None
+
+    data: Optional[
+        Union[ResourceIdentifier, List[ResourceIdentifier], Dict[str, Any]]
+    ] = None
     links: Optional[Links] = None
     meta: Optional[Dict[str, Any]] = None
 
@@ -47,12 +53,14 @@ class Relationship:
 @dataclass
 class ResourceAttributes:
     """资源属性基类"""
+
     pass
 
 
 @dataclass
 class NoteAttributes(ResourceAttributes):
     """笔记属性"""
+
     guid: str
     note_type: str
     tags: List[str]
@@ -64,6 +72,7 @@ class NoteAttributes(ResourceAttributes):
 @dataclass
 class CardAttributes(ResourceAttributes):
     """卡片属性"""
+
     note_id: int
     deck_id: int
     deck_name: str
@@ -80,6 +89,7 @@ class CardAttributes(ResourceAttributes):
 @dataclass
 class DeckAttributes(ResourceAttributes):
     """牌组属性"""
+
     name: str
     description: str
     review_count: int
@@ -96,6 +106,7 @@ class DeckAttributes(ResourceAttributes):
 @dataclass
 class NoteTypeAttributes(ResourceAttributes):
     """笔记类型属性"""
+
     name: str
     fields: List[str]
     templates: List[str]
@@ -104,9 +115,12 @@ class NoteTypeAttributes(ResourceAttributes):
 @dataclass
 class Resource:
     """资源对象"""
+
     type: str
     id: str
-    attributes: Optional[Union[NoteAttributes, CardAttributes, DeckAttributes, NoteTypeAttributes]] = None
+    attributes: Optional[
+        Union[NoteAttributes, CardAttributes, DeckAttributes, NoteTypeAttributes]
+    ] = None
     relationships: Optional[Dict[str, Relationship]] = None
     links: Optional[Links] = None
     meta: Optional[Dict[str, Any]] = None
@@ -115,6 +129,7 @@ class Resource:
 @dataclass
 class ResourceCollection:
     """资源集合"""
+
     data: List[Resource]
     included: Optional[List[Resource]] = None
     links: Optional[Links] = None
@@ -124,6 +139,7 @@ class ResourceCollection:
 @dataclass
 class SingleResource:
     """单个资源"""
+
     data: Optional[Resource] = None
     included: Optional[List[Resource]] = None
     links: Optional[Links] = None
@@ -133,6 +149,7 @@ class SingleResource:
 @dataclass
 class JsonApiDocument:
     """JSON:API 文档基类"""
+
     data: Optional[Union[Resource, List[Resource], None]] = None
     errors: Optional[List[Dict[str, Any]]] = None
     meta: Optional[Dict[str, Any]] = None
@@ -144,6 +161,7 @@ class JsonApiDocument:
 @dataclass
 class NoteCollectionDocument(JsonApiDocument):
     """笔记集合文档"""
+
     data: List[Resource] = field(default_factory=list)
     meta: Dict[str, Any] = field(default_factory=dict)
 
@@ -151,12 +169,14 @@ class NoteCollectionDocument(JsonApiDocument):
 @dataclass
 class NoteDocument(JsonApiDocument):
     """单个笔记文档"""
+
     data: Optional[Resource] = None
 
 
 @dataclass
 class CardCollectionDocument(JsonApiDocument):
     """卡片集合文档"""
+
     data: List[Resource] = field(default_factory=list)
     meta: Dict[str, Any] = field(default_factory=dict)
 
@@ -164,6 +184,7 @@ class CardCollectionDocument(JsonApiDocument):
 @dataclass
 class DeckCollectionDocument(JsonApiDocument):
     """牌组集合文档"""
+
     data: List[Resource] = field(default_factory=list)
     meta: Dict[str, Any] = field(default_factory=dict)
 
@@ -171,12 +192,14 @@ class DeckCollectionDocument(JsonApiDocument):
 @dataclass
 class DeckDocument(JsonApiDocument):
     """单个牌组文档"""
+
     data: Optional[Resource] = None
 
 
 @dataclass
 class NoteTypeCollectionDocument(JsonApiDocument):
     """笔记类型集合文档"""
+
     data: List[Resource] = field(default_factory=list)
     meta: Dict[str, Any] = field(default_factory=dict)
 
@@ -184,6 +207,7 @@ class NoteTypeCollectionDocument(JsonApiDocument):
 @dataclass
 class Error:
     """错误对象"""
+
     id: Optional[str] = None
     status: Optional[str] = None
     code: Optional[str] = None
@@ -196,26 +220,26 @@ class Error:
 @dataclass
 class ErrorDocument(JsonApiDocument):
     """错误文档"""
+
     errors: List[Error] = field(default_factory=list)
 
 
 @dataclass
 class RootDocument(JsonApiDocument):
     """根路径文档"""
+
     data: None = None
-    meta: Dict[str, Any] = field(default_factory=lambda: {
-        "message": "Anki Restful API",
-        "version": "1.0.4"
-    })
-    links: Links = field(default_factory=lambda: Links(
-        self="/api/"
-    ))
+    meta: Dict[str, Any] = field(
+        default_factory=lambda: {"message": "Anki Restful API", "version": "1.0.4"}
+    )
+    links: Links = field(default_factory=lambda: Links(self="/api/"))
 
 
 # 分页信息
 @dataclass
 class PaginationMeta:
     """分页元信息"""
+
     page: int
     limit: int
     total: int
@@ -234,12 +258,11 @@ def create_note_resource(note_id: int, note_data: Dict[str, Any]) -> Resource:
             tags=note_data.get("tags", []),
             fields=note_data.get("fields", {}),
             created=note_data.get("created", 0),
-            modified=note_data.get("modified", 0)
+            modified=note_data.get("modified", 0),
         ),
         links=Links(
-            self=f"/api/notes/{note_id}",
-            related=f"/api/notes/{note_id}/cards"
-        )
+            self=f"/api/notes/{note_id}", related=f"/api/notes/{note_id}/cards"
+        ),
     )
 
 
@@ -259,27 +282,29 @@ def create_card_resource(card_id: int, card_data: Dict[str, Any]) -> Resource:
             ease_factor=card_data.get("ease_factor", 0),
             reviews=card_data.get("reviews", 0),
             lapses=card_data.get("lapses", 0),
-            due=card_data.get("due", 0)
+            due=card_data.get("due", 0),
         ),
         relationships={
             "note": Relationship(
-                data=ResourceIdentifier(type="notes", id=str(card_data.get("note_id", 0))),
+                data=ResourceIdentifier(
+                    type="notes", id=str(card_data.get("note_id", 0))
+                ),
                 links=Links(
                     self=f"/api/cards/{card_id}/relationships/note",
-                    related=f"/api/notes/{card_data.get('note_id', 0)}"
-                )
+                    related=f"/api/notes/{card_data.get('note_id', 0)}",
+                ),
             ),
             "deck": Relationship(
-                data=ResourceIdentifier(type="decks", id=str(card_data.get("deck_id", 0))),
+                data=ResourceIdentifier(
+                    type="decks", id=str(card_data.get("deck_id", 0))
+                ),
                 links=Links(
                     self=f"/api/cards/{card_id}/relationships/deck",
-                    related=f"/api/decks/{card_data.get('deck_id', 0)}"
-                )
-            )
+                    related=f"/api/decks/{card_data.get('deck_id', 0)}",
+                ),
+            ),
         },
-        links=Links(
-            self=f"/api/cards/{card_id}"
-        )
+        links=Links(self=f"/api/cards/{card_id}"),
     )
 
 
@@ -299,24 +324,25 @@ def create_deck_resource(deck_id: int, deck_data: Dict[str, Any]) -> Resource:
             deck_config_id=deck_data.get("deck_config_id", 0),
             deck_config_name=deck_data.get("deck_config_name", ""),
             created=deck_data.get("created", 0),
-            modified=deck_data.get("modified", 0)
+            modified=deck_data.get("modified", 0),
         ),
         relationships={
             "notes": Relationship(
                 links=Links(
                     self=f"/api/decks/{deck_id}/relationships/notes",
-                    related=f"/api/decks/{deck_id}/notes"
+                    related=f"/api/decks/{deck_id}/notes",
                 )
             )
         },
         links=Links(
-            self=f"/api/decks/{deck_id}",
-            related=f"/api/decks/{deck_id}/notes"
-        )
+            self=f"/api/decks/{deck_id}", related=f"/api/decks/{deck_id}/notes"
+        ),
     )
 
 
-def create_note_type_resource(note_type_id: int, note_type_data: Dict[str, Any]) -> Resource:
+def create_note_type_resource(
+    note_type_id: int, note_type_data: Dict[str, Any]
+) -> Resource:
     """创建笔记类型资源对象"""
     return Resource(
         type="notetypes",
@@ -324,9 +350,7 @@ def create_note_type_resource(note_type_id: int, note_type_data: Dict[str, Any])
         attributes=NoteTypeAttributes(
             name=note_type_data.get("name", ""),
             fields=note_type_data.get("fields", []),
-            templates=note_type_data.get("templates", [])
+            templates=note_type_data.get("templates", []),
         ),
-        links=Links(
-            self=f"/api/notetypes/{note_type_id}"
-        )
+        links=Links(self=f"/api/notetypes/{note_type_id}"),
     )
