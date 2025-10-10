@@ -123,6 +123,45 @@ class AnkiAPIHandler(BaseHTTPRequestHandler):
     def do_PUT(self):
         return self.do_METHOD("PUT")
 
+    def do_OPTIONS(self):
+        """处理OPTIONS请求，用于CORS预检"""
+        try:
+            # 解析URL路径
+            parsed_path = urllib.parse.urlparse(self.path)
+            path = parsed_path.path
+
+            logger.info(f"HTTP OPTIONS {path}")
+
+            # 设置CORS头
+            self.send_response(200)
+            self.send_header("Content-Type", "application/vnd.api+json")
+
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header(
+                "Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS"
+            )
+            self.send_header(
+                "Access-Control-Allow-Headers", "Content-Type, Authorization"
+            )
+            self.send_header("Access-Control-Max-Age", "86400")  # 24小时
+
+            self.end_headers()
+        except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError) as e:
+            # 客户端中断连接，这是正常情况，不需要记录错误
+            logger.info(f"Client disconnected during OPTIONS request: {str(e)}")
+        except Exception as e:
+            try:
+                self.send_error_response(500, f"Internal server error: {str(e)}")
+            except (
+                ConnectionAbortedError,
+                ConnectionResetError,
+                BrokenPipeError,
+            ) as conn_e:
+                # 客户端中断连接，这是正常情况，不需要记录错误
+                logger.info(
+                    f"Client disconnected while sending internal error: {str(conn_e)}"
+                )
+
     def do_GET(self):
         parsed_path = urllib.parse.urlparse(self.path)
         path = parsed_path.path
@@ -285,9 +324,7 @@ class AnkiAPIHandler(BaseHTTPRequestHandler):
                 # 对于普通字典，直接使用
                 json_data = document
 
-            self.wfile.write(
-                json.dumps(json_data, ensure_ascii=False).encode("utf-8")
-            )
+            self.wfile.write(json.dumps(json_data, ensure_ascii=False).encode("utf-8"))
         except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError) as e:
             # 客户端中断连接，这是正常情况，不需要记录错误
             logger.info(f"Client disconnected: {str(e)}")
