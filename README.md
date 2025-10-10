@@ -169,7 +169,7 @@ cd AnkiRestful
 ### 项目结构
 
 ```
-AnkiRestful2/
+AnkiRestful/
 ├── api.py          # 核心 API 实现
 ├── schema.py       # 数据模型定义
 ├── config.json     # 配置文件

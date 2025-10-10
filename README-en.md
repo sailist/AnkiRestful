@@ -167,7 +167,7 @@ cd AnkiRestful
 ### Project Structure
 
 ```
-AnkiRestful2/
+AnkiRestful/
 ├── api.py          # Core API implementation
 ├── schema.py       # Data model definitions
 ├── config.json     # Configuration file
