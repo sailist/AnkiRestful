@@ -230,7 +230,7 @@ class RootDocument(JsonApiDocument):
 
     data: None = None
     meta: Dict[str, Any] = field(
-        default_factory=lambda: {"message": "Anki Restful API", "version": "1.0.4"}
+        default_factory=lambda: {"message": "Anki Restful API", "version": "1.1.0"}
     )
     links: Links = field(default_factory=lambda: Links(self="/api/"))
 

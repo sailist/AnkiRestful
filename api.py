@@ -11,14 +11,20 @@ import schema
 import logging
 import sys
 from anki.notes import Note
+from anki.errors import NotFoundError
 
-api_version = "1.0.4"
+api_version = "1.1.0"
 
 # 全局路由注册表
 API_ROUTES = {}
 
 logger = logging.getLogger()
 logger.info("API module loaded")
+
+
+def deck_query(name):
+    """构造牌组搜索串（双引号包裹，支持含空格/特殊字符的牌组名）"""
+    return 'deck:"' + name.replace('"', '\\"') + '"'
 
 
 def api_route(path):
@@ -64,7 +70,7 @@ class RootAPIHandler(APIHandler):
         for route_path, handler_class in API_ROUTES.items():
             methods = [
                 i
-                for i in ["GET", "POST", "PUT", "DELETE"]
+                for i in ["GET", "POST", "PUT", "PATCH", "DELETE"]
                 if getattr(handler_class, f"do_{i}", None)
             ]
             endpoints[route_path.replace("<", "{").replace(">", "}")] = {
@@ -154,8 +160,8 @@ class NotesAPIHandler(APIHandler):
             )
             return
 
-        # 校验牌组
-        deck = mw.col.decks.get(deck_id)
+        # 校验牌组（default=False：不存在的 id 返回 None 而非默认牌组）
+        deck = mw.col.decks.get(deck_id, default=False)
         if not deck:
             self.req_handler.send_error_response(
                 404, "Not Found", f"Deck with ID {deck_id} not found"
@@ -247,9 +253,17 @@ class NotesAPIHandler(APIHandler):
 
             query_params = parse_qs(urlparse(self.req_handler.path).query)
 
-            # 分页参数
-            page = int(query_params.get("page", [1])[0])
-            limit = int(query_params.get("limit", [20])[0])
+            # 分页参数（page/limit 必须为 >=1 的整数）
+            try:
+                page = int(query_params.get("page", [1])[0])
+                limit = int(query_params.get("limit", [20])[0])
+                if page < 1 or limit < 1:
+                    raise ValueError
+            except ValueError:
+                self.req_handler.send_error_response(
+                    400, "Bad Request", "Invalid pagination parameters"
+                )
+                return
             offset = (page - 1) * limit
 
             # 获取所有笔记ID
@@ -285,18 +299,19 @@ class NotesAPIHandler(APIHandler):
                 resource = schema.create_note_resource(note_id, note_data)
                 resources.append(resource)
 
-            # 创建分页链接
+            # 创建分页链接（pages 至少为 1，避免空结果时 last 生成 page=0 的非法链接）
+            pages = max(1, (total_notes + limit - 1) // limit)
             base_url = "/api/notes"
             links = schema.Links(
                 self=f"{base_url}?page={page}&limit={limit}",
                 first=f"{base_url}?page=1&limit={limit}",
-                last=f"{base_url}?page={(total_notes + limit - 1) // limit}&limit={limit}",
+                last=f"{base_url}?page={pages}&limit={limit}",
             )
 
             if page > 1:
                 links.prev = f"{base_url}?page={page-1}&limit={limit}"
 
-            if page < (total_notes + limit - 1) // limit:
+            if page < pages:
                 links.next = f"{base_url}?page={page+1}&limit={limit}"
 
             # 创建文档
@@ -308,7 +323,7 @@ class NotesAPIHandler(APIHandler):
                         "page": page,
                         "limit": limit,
                         "total": total_notes,
-                        "pages": (total_notes + limit - 1) // limit,
+                        "pages": pages,
                     }
                 },
             )
@@ -446,8 +461,10 @@ class NoteCardsAPIHandler(APIHandler):
             )
             return
 
-        note = mw.col.get_note(int(note_id))
-        if not note:
+        # get_note 对不存在的 id 抛 NotFoundError，而非返回 None
+        try:
+            note = mw.col.get_note(int(note_id))
+        except NotFoundError:
             self.req_handler.send_error_response(
                 404, "Not Found", f"Note with ID {note_id} not found"
             )
@@ -505,10 +522,10 @@ class DecksAPIHandler(APIHandler):
             deck = mw.col.decks.get(deck_id)
 
             # 获取牌组中的卡片数量
-            card_ids = mw.col.find_cards(f"deck:{deck['name']}")
+            card_ids = mw.col.find_cards(deck_query(deck["name"]))
 
             # 获取牌组中的笔记数量
-            note_ids = mw.col.find_notes(f"deck:{deck['name']}")
+            note_ids = mw.col.find_notes(deck_query(deck["name"]))
 
             # 获取牌组配置名称
             deck_config_name = ""
@@ -564,10 +581,10 @@ class DeckDetailAPIHandler(APIHandler):
             return
 
         # 获取牌组中的卡片数量
-        card_ids = mw.col.find_cards(f"deck:{deck['name']}")
+        card_ids = mw.col.find_cards(deck_query(deck["name"]))
 
         # 获取牌组中的笔记数量
-        note_ids = mw.col.find_notes(f"deck:{deck['name']}")
+        note_ids = mw.col.find_notes(deck_query(deck["name"]))
 
         # 获取牌组配置名称
         deck_config_name = ""
@@ -613,7 +630,8 @@ class DeckNotesAPIHandler(APIHandler):
             )
             return
 
-        deck = mw.col.decks.get(int(deck_id))
+        # default=False：不存在的 id 返回 None 而非默认牌组
+        deck = mw.col.decks.get(int(deck_id), default=False)
         if not deck:
             self.req_handler.send_error_response(
                 404, "Not Found", f"Deck with ID {deck_id} not found"
@@ -621,7 +639,7 @@ class DeckNotesAPIHandler(APIHandler):
             return
 
         # 获取该牌组中的所有笔记ID
-        note_ids = mw.col.find_notes(f"deck:{deck['name']}")
+        note_ids = mw.col.find_notes(deck_query(deck["name"]))
         resources = []
 
         for note_id in note_ids:
@@ -839,3 +857,23 @@ def reload_api_handlers():
     global API_ROUTES
 
     return f"API handlers reloaded. Registered routes: {get_all_routes()}"
+
+
+# 加载各分类 handler 子模块（import 时通过 @api_route 自动注册路由；
+# 子类会覆盖同路径的父类注册，/restart 热重载时会一并重新导入）。
+# 逐个 try/except：任一子模块导入失败只损失该模块的路由，
+# 不影响其余模块与整个 API 服务的可用性。
+for _submodule in (
+    "api_notes",
+    "api_decks",
+    "api_notetypes",
+    "api_cards",
+    "api_media",
+    "api_stats",
+    "api_system",
+    "api_review",
+):
+    try:
+        __import__(_submodule)
+    except Exception:
+        logger.error(f"Failed to import API submodule: {_submodule}", exc_info=True)

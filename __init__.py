@@ -12,7 +12,6 @@ import urllib.parse
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from anki.hooks import addHook
 from aqt.utils import showInfo
-import traceback
 import logging
 from dataclasses import asdict
 from logging.handlers import RotatingFileHandler
@@ -75,6 +74,7 @@ def load_config():
         return {
             "server": {"host": "localhost", "port": 8080, "auto_start": True},
             "api": {"enable_cors": True, "max_connections": 10},
+            "security": {"api_key": "", "allowed_origins": ["*"]},
         }
 
 
@@ -82,6 +82,28 @@ CONFIG = load_config()
 
 
 class AnkiAPIHandler(BaseHTTPRequestHandler):
+
+    def _check_auth(self):
+        """校验 API Key（config.json 的 security.api_key 非空时启用）。
+
+        未配置 api_key 时全部放行（默认关闭，保持向后兼容）；
+        配置后要求请求头携带 Authorization: Bearer <api_key>。
+        """
+        api_key = CONFIG.get("security", {}).get("api_key", "")
+        if not api_key:
+            return True
+        if self.headers.get("Authorization", "") == f"Bearer {api_key}":
+            return True
+        self.send_error_response(401, "Unauthorized", "Invalid or missing API key")
+        return False
+
+    def _cors_origin(self):
+        """根据 security.allowed_origins 计算响应的 CORS Origin（不允许时返回 None）"""
+        allowed = CONFIG.get("security", {}).get("allowed_origins", ["*"])
+        if "*" in allowed:
+            return "*"
+        origin = self.headers.get("Origin", "")
+        return origin if origin in allowed else None
 
     def do_METHOD(self, method):
         """Handle METHOD requests"""
@@ -92,8 +114,12 @@ class AnkiAPIHandler(BaseHTTPRequestHandler):
 
             logger.info(f"HTTP {method} {path}")
 
-            # Route handling
-            if path.startswith("/api/"):
+            # API Key 校验（未配置时默认放行）
+            if not self._check_auth():
+                return
+
+            # Route handling（/api 无尾斜杠同样已注册在路由表，需一并分发）
+            if path == "/api" or path.startswith("/api/"):
                 self.handle_api_request(path, method=method)
             else:
                 self.send_error_response(404, f"Endpoint {path} not found")
@@ -123,6 +149,9 @@ class AnkiAPIHandler(BaseHTTPRequestHandler):
     def do_PUT(self):
         return self.do_METHOD("PUT")
 
+    def do_PATCH(self):
+        return self.do_METHOD("PATCH")
+
     def do_OPTIONS(self):
         """处理OPTIONS请求，用于CORS预检"""
         try:
@@ -136,9 +165,11 @@ class AnkiAPIHandler(BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header("Content-Type", "application/vnd.api+json")
 
-            self.send_header("Access-Control-Allow-Origin", "*")
+            origin = self._cors_origin()
+            if origin:
+                self.send_header("Access-Control-Allow-Origin", origin)
             self.send_header(
-                "Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS"
+                "Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS"
             )
             self.send_header(
                 "Access-Control-Allow-Headers", "Content-Type, Authorization"
@@ -166,8 +197,10 @@ class AnkiAPIHandler(BaseHTTPRequestHandler):
         parsed_path = urllib.parse.urlparse(self.path)
         path = parsed_path.path
 
-        # hack: restart handling
+        # hack: restart handling（与 API 一样需要 API Key 校验）
         if path == "/restart":
+            if not self._check_auth():
+                return
             self.handle_restart()
         else:
             return self.do_METHOD("GET")
@@ -178,9 +211,11 @@ class AnkiAPIHandler(BaseHTTPRequestHandler):
             # 重新加载api模块
             import sys
 
-            # 如果api模块已加载，先删除它
-            if "api" in sys.modules:
-                del sys.modules["api"]
+            # 如果api模块及各分类handler子模块已加载，先删除它们
+            for mod_name in [
+                m for m in list(sys.modules) if m == "api" or m.startswith("api_")
+            ]:
+                del sys.modules[mod_name]
 
             # 重新导入api模块
             import api
@@ -227,26 +262,32 @@ class AnkiAPIHandler(BaseHTTPRequestHandler):
             handler, params = api.get_api_handler(path, self, method)
 
             if handler:
-                fn = getattr(handler, f"do_{method.upper()}")
-                if not fn:
+                fn = getattr(handler, f"do_{method.upper()}", None)
+                if fn is None:
                     self.send_error_response(
-                        404, f"API endpoint {method} not found: {path}"
+                        404,
+                        "Not Found",
+                        f"API endpoint {path} does not support method {method}",
                     )
                     return
                 # 如果有参数，传递给handle方法；否则直接调用
                 try:
                     fn(**params)
                 except ValueError:
+                    # traceback 只写日志，响应 detail 不含内部路径等敏感信息
+                    logger.exception(f"Invalid parameter for {method} {path}: {params}")
                     self.send_error_response(
                         400,
                         "Bad Request",
-                        f"Invalid parameter: {params}, {traceback.format_exc()}",
+                        f"Invalid parameter: {params}",
                     )
                 except Exception as e:
+                    # traceback 只写日志，响应 detail 不含内部路径等敏感信息
+                    logger.exception(f"Error handling {method} {path}")
                     self.send_error_response(
                         500,
                         "Internal Server Error",
-                        f"Error getting note details: {str(e)}, {traceback.format_exc()}",
+                        f"Error handling request: {str(e)}",
                     )
 
             else:
@@ -271,10 +312,14 @@ class AnkiAPIHandler(BaseHTTPRequestHandler):
                 logger.info(
                     f"Client disconnected while sending import error: {str(conn_e)}"
                 )
-        except Exception:
+        except Exception as e:
+            # traceback 只写日志，响应 detail 不含内部路径等敏感信息
+            logger.exception(f"Error handling API request: {method} {path}")
             try:
                 self.send_error_response(
-                    500, f"Error handling API request: {traceback.format_exc()}"
+                    500,
+                    "Internal Server Error",
+                    f"Error handling API request: {str(e)}",
                 )
             except (
                 ConnectionAbortedError,
@@ -291,24 +336,13 @@ class AnkiAPIHandler(BaseHTTPRequestHandler):
         try:
             self.send_response(status_code)
             self.send_header("Content-Type", "application/vnd.api+json")
-            # 动态导入CONFIG以获取最新配置
-            try:
-                from . import CONFIG
-
-                if CONFIG.get("api", {}).get("enable_cors", True):
-                    self.send_header("Access-Control-Allow-Origin", "*")
-                    self.send_header(
-                        "Access-Control-Allow-Methods",
-                        "GET, POST, PUT, DELETE, OPTIONS",
-                    )
-                    self.send_header(
-                        "Access-Control-Allow-Headers", "Content-Type, Authorization"
-                    )
-            except Exception as e:
-                # 如果导入失败，默认启用CORS
-                self.send_header("Access-Control-Allow-Origin", "*")
+            # CORS：按 security.allowed_origins 白名单计算（默认 *，与旧行为一致）
+            if CONFIG.get("api", {}).get("enable_cors", True):
+                origin = self._cors_origin()
+                if origin:
+                    self.send_header("Access-Control-Allow-Origin", origin)
                 self.send_header(
-                    "Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS"
+                    "Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS"
                 )
                 self.send_header(
                     "Access-Control-Allow-Headers", "Content-Type, Authorization"
@@ -324,7 +358,15 @@ class AnkiAPIHandler(BaseHTTPRequestHandler):
                 # 对于普通字典，直接使用
                 json_data = document
 
-            self.wfile.write(json.dumps(json_data, ensure_ascii=False).encode("utf-8"))
+            self.wfile.write(
+                json.dumps(
+                    json_data,
+                    ensure_ascii=False,
+                    default=lambda o: asdict(o)
+                    if hasattr(o, "__dataclass_fields__")
+                    else str(o),
+                ).encode("utf-8")
+            )
         except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError) as e:
             # 客户端中断连接，这是正常情况，不需要记录错误
             logger.info(f"Client disconnected: {str(e)}")

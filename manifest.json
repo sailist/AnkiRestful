@@ -1,13 +1,13 @@
 {
     "name": "Anki Restful API",
     "package": "anki.restful.api",
-    "version": "0.0.1",
+    "version": "1.1.0",
     "description": "Provides RESTful API for Anki to access/manage cards, decks, and notes via HTTP requests",
     "author": "haozhe",
     "homepage": "https://github.com/sailist/AnkiRestful",
     "license": "MIT",
     "min_anki_version": "25.09.2",
-    "max_anki_version": "25.09.2",
+    "max_anki_version": "26.08.1",
     "targets": [
         "anki",
         "ankidroid"

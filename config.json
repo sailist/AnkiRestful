@@ -7,5 +7,9 @@
     "api": {
         "enable_cors": true,
         "max_connections": 10
+    },
+    "security": {
+        "api_key": "",
+        "allowed_origins": ["*"]
     }
 }
