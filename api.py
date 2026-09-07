@@ -872,6 +872,7 @@ for _submodule in (
     "api_stats",
     "api_system",
     "api_review",
+    "api_openapi",
 ):
     try:
         __import__(_submodule)

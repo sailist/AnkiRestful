@@ -26,6 +26,10 @@ http://localhost:8102
 
 主机与端口由插件 `config.json` 的 `server.host` / `server.port` 决定。
 
+### OpenAPI
+
+`GET /api/openapi.json` 会根据当前已注册的路由动态生成 **OpenAPI 3.1** 规范文档（含全部路径、方法、查询参数、请求体 schema 与 JSON:API 信封），可直接导入 Swagger UI、Postman、Bruno 等工具使用。仓库中的 [openapi.json](openapi.json) 是某次生成的快照，最新版本以运行中的端点为准。
+
 ### 数据格式
 
 - 请求与响应均为 JSON，遵循 [JSON:API](https://jsonapi.org/) 规范
